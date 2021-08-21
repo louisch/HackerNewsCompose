@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">HackerNewsCompose</string>
+    <string name="topAppBarOpenMenuContentDescription">Open Menu</string>
+    <string name="topAppBarAccountContentDescription">Account</string>
+</resources>
