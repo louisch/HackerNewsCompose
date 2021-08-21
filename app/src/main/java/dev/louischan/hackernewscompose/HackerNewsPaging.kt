@@ -32,6 +32,7 @@ class HNStoryRemoteMediator(appDatabase: AppDatabase, private val apiService: HN
                 }
                 LoadType.APPEND -> {
                     Log.d(javaClass.name, "appending")
+                    // TODO: Try to use state here instead of reading from DB (impossible?)
                     val lastItem = storyDao.lastItemOrNull()
                     if (lastItem == null) {
                         Log.d(javaClass.name, "last item was null, no more to append")
