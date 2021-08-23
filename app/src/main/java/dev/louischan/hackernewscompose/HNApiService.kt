@@ -68,8 +68,9 @@ data class HNStory (
 data class HNComment (
     val id: Long,
     val parent: Long,
-    @SerializedName("by") val author: String,
-    val text: String,
+    @SerializedName("by") val author: String?,
+    val text: String?,
+    @SerializedName("deleted") val isDeleted: Boolean?,
     val kids: List<Long>?,
     val time: Timestamp,
 )

@@ -34,21 +34,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val model: MainViewModel by viewModels()
-        val storyDao = model.db.storyDao()
-        val commentDao = model.db.commentDao()
-        val apiService = HNApiService.buildService()
-        val pagerConfig = PagingConfig(pageSize = 30)
-        val storyPager = Pager(config = pagerConfig,
-                               remoteMediator = HNStoryRemoteMediator(model.db, apiService)) {
-            storyDao.pagingSource()
-        }
-        val commentPager = Pager(config = pagerConfig, remoteMediator = HNCommentRemoteMediator(model.db)) {
-            commentDao.pagingSource()
-        }
 
         setContent {
             HackerNewsComposeTheme {
-                NewsRoot(storyPager = storyPager, commentPager = commentPager)
+                NewsRoot(model = model)
             }
         }
     }
@@ -58,17 +47,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val db = AppDatabase.getInstance(application)
 }
 
-enum class NavigationState {
-    NEWS,
-    COMMENTS
-}
-
+@ExperimentalPagingApi
 @ExperimentalMaterialApi
 @Composable
-fun NewsRoot(storyPager: Pager<Int, Story>, commentPager: Pager<Int, Comment>) {
+fun NewsRoot(model: MainViewModel) {
     val scaffoldState = rememberScaffoldState()
-    val navigationState = NavigationState.NEWS
     val coroutineScope = rememberCoroutineScope()
+
+    val storyDao = model.db.storyDao()
+    val commentDao = model.db.commentDao()
+
+    val apiService = HNApiService.buildService()
+    val pagerConfig = PagingConfig(pageSize = 30)
+    val storyPager = Pager(config = pagerConfig,
+        remoteMediator = HNStoryRemoteMediator(model.db, apiService)) {
+        storyDao.pagingSource()
+    }
+
+    val (storyForComments, setStoryForComments) = remember { mutableStateOf<Story?>(null) }
+    val commentPager by produceState<Pager<Int, Comment>?>(null, storyForComments) {
+        if (storyForComments == null) {
+            value = null
+            return@produceState
+        }
+        val storyWithComments = storyDao.getStoryWithCommentsById(storyForComments.id)
+        if (storyWithComments == null) {
+            value = null
+            return@produceState
+        }
+        value = Pager(config = pagerConfig, remoteMediator = HNCommentRemoteMediator(storyWithComments, model.db, apiService)) {
+            commentDao.pagingSource()
+        }
+    }
 
     Scaffold(
         scaffoldState = scaffoldState,
@@ -95,13 +105,10 @@ fun NewsRoot(storyPager: Pager<Int, Story>, commentPager: Pager<Int, Comment>) {
             Text("Drawer content")
         },
         content = { innerPadding ->
-            when (navigationState) {
-                NavigationState.NEWS -> {
-                    NewsList(storyPager, innerPadding)
-                }
-                NavigationState.COMMENTS -> {
-                    NewsComments(commentPager, innerPadding)
-                }
+            if (commentPager == null) {
+                NewsList(storyPager, innerPadding, setStoryForComments)
+            } else {
+                NewsComments(commentPager!!, innerPadding)
             }
         }
     )
@@ -109,7 +116,7 @@ fun NewsRoot(storyPager: Pager<Int, Story>, commentPager: Pager<Int, Comment>) {
 
 @ExperimentalMaterialApi
 @Composable
-fun NewsList(pager: Pager<Int, Story>, innerPadding: PaddingValues) {
+fun NewsList(pager: Pager<Int, Story>, innerPadding: PaddingValues, onSelectComments: (Story?) -> Unit) {
     val lazyPagingItems = pager.flow.collectAsLazyPagingItems()
 
     LazyColumn(contentPadding = innerPadding) {
@@ -134,7 +141,7 @@ fun NewsList(pager: Pager<Int, Story>, innerPadding: PaddingValues) {
 
         items(lazyPagingItems) { item ->
             if (item != null) {
-                NewsRow(item)
+                NewsRow(item, onSelectComments)
             } else {
                 NewsPlaceholder()
             }
@@ -149,7 +156,7 @@ fun NewsPlaceholder() {
 
 @ExperimentalMaterialApi
 @Composable
-fun NewsRow(story: Story) {
+fun NewsRow(story: Story, onSelectComments: (Story?) -> Unit) {
     Column {
         ListItem(
             text = { Text(text = story.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -163,7 +170,7 @@ fun NewsRow(story: Story) {
             icon = { IconButton(onClick = { }) { Text(text = story.score.toString()) } },
         )
         Row(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-            Button(onClick = {}, colors = ButtonDefaults.outlinedButtonColors()) {
+            Button(onClick = { onSelectComments(story) }, colors = ButtonDefaults.outlinedButtonColors()) {
                 Text("Comments")
             }
         }
@@ -171,9 +178,58 @@ fun NewsRow(story: Story) {
     Divider()
 }
 
+@ExperimentalMaterialApi
 @Composable
 fun NewsComments(pager: Pager<Int, Comment>, innerPadding: PaddingValues) {
-    LazyColumn(contentPadding = innerPadding) {
+    val lazyPagingItems = pager.flow.collectAsLazyPagingItems()
 
+    LazyColumn(contentPadding = innerPadding) {
+        lazyPagingItems.apply {
+            when {
+                loadState.refresh == LoadState.Loading -> {
+                    // TODO("add UI for refreshing items")
+                }
+                loadState.refresh is LoadState.Error -> {
+                    val message = (loadState.refresh as LoadState.Error).error.localizedMessage ?: "null error message"
+                    item { Text(message, color = Color.Red) }
+                }
+                loadState.append == LoadState.Loading -> {
+                    // TODO("add UI for appending items")
+                }
+                loadState.append is LoadState.Error -> {
+                    val message = (loadState.append as LoadState.Error).error.localizedMessage ?: "null error message"
+                    item { Text(message, color = Color.Red) }
+                }
+            }
+        }
+
+        items(lazyPagingItems) { item ->
+            if (item != null) {
+                CommentRow(item)
+            } else {
+                CommentPlaceholder()
+            }
+        }
     }
+}
+
+@Composable
+fun CommentPlaceholder() {
+    Text("Loading comment, please wait...")
+}
+
+@ExperimentalMaterialApi
+@Composable
+fun CommentRow(item: Comment) {
+    if (!item.isDeleted) {
+        ListItem(
+            modifier = Modifier.padding(bottom = 16.dp),
+            text = { Text(item.text) },
+            overlineText = { Text(item.author) },
+            secondaryText = { Text(item.timePosted.toString()) }
+        )
+    } else {
+        ListItem(text = { Text("<deleted comment>") })
+    }
+    Divider()
 }

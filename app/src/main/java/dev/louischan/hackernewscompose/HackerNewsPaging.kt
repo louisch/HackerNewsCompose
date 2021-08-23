@@ -5,7 +5,6 @@ import androidx.paging.*
 import kotlinx.coroutines.flow.*
 import retrofit2.HttpException
 import java.io.IOException
-import kotlin.system.measureTimeMillis
 
 /**
  * An implementation of [RemoteMediator] for Hacker News
@@ -17,6 +16,7 @@ import kotlin.system.measureTimeMillis
 class HNStoryRemoteMediator(appDatabase: AppDatabase, private val apiService: HNApiService) : RemoteMediator<Int, Story>() {
     private val topStoryIdDao = appDatabase.topStoryIdDao()
     private val storyDao = appDatabase.storyDao()
+    private val commentIdDao = appDatabase.commentIdDao()
 
     override suspend fun load(
         loadType: LoadType,
@@ -53,7 +53,11 @@ class HNStoryRemoteMediator(appDatabase: AppDatabase, private val apiService: HN
 
             val stories = nextTopStoryIds.asFlow().map { topStoryId ->
                 val hnStory = apiService.story(topStoryId.id)
-                Story.fromHNStory(hnStory, topStoryId.index)
+                val story = Story.fromHNStory(hnStory, topStoryId.index)
+                if (hnStory.kids != null) {
+                    commentIdDao.insertAllLongs(story.id, hnStory.kids)
+                }
+                story
             }
                 .buffer()
                 .toList()
@@ -71,7 +75,7 @@ class HNStoryRemoteMediator(appDatabase: AppDatabase, private val apiService: HN
 }
 
 @ExperimentalPagingApi
-class HNCommentRemoteMediator(appDatabase: AppDatabase) : RemoteMediator<Int, Comment>() {
+class HNCommentRemoteMediator(private val storyForComments: StoryWithComments, appDatabase: AppDatabase, val apiService: HNApiService) : RemoteMediator<Int, Comment>() {
     private val commentDao = appDatabase.commentDao()
 
     override suspend fun load(
@@ -79,6 +83,37 @@ class HNCommentRemoteMediator(appDatabase: AppDatabase) : RemoteMediator<Int, Co
         state: PagingState<Int, Comment>
     ): MediatorResult {
         return try {
+            val commentIds = when (loadType) {
+                LoadType.REFRESH -> {
+                    Log.d(javaClass.name, "refreshing")
+                    commentDao.deleteAll()
+                    storyForComments.commentIds.subList(0, minOf(state.config.pageSize, storyForComments.commentIds.size))
+                }
+                LoadType.PREPEND -> {
+                    Log.d(javaClass.name, "no need to prepend, end paging")
+                    return MediatorResult.Success(endOfPaginationReached = true)
+                }
+                LoadType.APPEND -> {
+                    val commentCount = commentDao.count()
+                    storyForComments.commentIds.subList(
+                        commentCount.toInt(),
+                        minOf((commentCount + state.config.pageSize).toInt(), storyForComments.commentIds.size)
+                    )
+                }
+            }
+
+            if (commentIds.isEmpty()) {
+                Log.d(javaClass.name, "No comments left to load")
+                return MediatorResult.Success(endOfPaginationReached = true)
+            }
+
+            val comments = commentIds.asFlow().map { commentId ->
+                val hnComment = apiService.comment(commentId.id)
+                Comment.fromHNComment(hnComment)
+            }
+                .buffer()
+                .toList()
+            commentDao.insertAll(comments)
 
             MediatorResult.Success(endOfPaginationReached = false)
         } catch (e: IOException) {

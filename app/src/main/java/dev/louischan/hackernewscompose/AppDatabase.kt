@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.*
 import java.sql.Timestamp
 
-@Database(entities = [Story::class, TopStoryId::class, Comment::class], version = 1)
+@Database(entities = [Story::class, TopStoryId::class, Comment::class, CommentId::class], version = 1)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     companion object {
@@ -20,6 +20,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun storyDao(): StoryDao
     abstract fun topStoryIdDao(): TopStoryIdDao
     abstract fun commentDao(): CommentDao
+    abstract fun commentIdDao(): CommentIdDao
 }
 
 class Converters {

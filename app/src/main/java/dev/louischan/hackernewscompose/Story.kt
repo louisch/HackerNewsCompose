@@ -17,7 +17,7 @@ data class Story (
     @ColumnInfo(name = "url") val url: String?,
     @ColumnInfo(name = "score") val score: Int,
     @ColumnInfo(name = "comment_count") val commentCount: Int,
-    @ColumnInfo(name = "poll_id") val pollId: Int?
+    @ColumnInfo(name = "poll_id") val pollId: Int?,
 ) {
     companion object {
         fun fromHNStory(hnStory: HNStory, index: Long): Story {
@@ -33,11 +33,20 @@ data class Story (
                 url = hnStory.url,
                 score = hnStory.score,
                 commentCount = hnStory.descendants,
-                pollId = hnStory.poll
+                pollId = hnStory.poll,
             )
         }
     }
 }
+
+data class StoryWithComments(
+    @Embedded val story: Story,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "story_id",
+    )
+    val commentIds: List<CommentId>
+)
 
 @Dao
 interface StoryDao {
@@ -55,4 +64,8 @@ interface StoryDao {
 
     @Query("SELECT * FROM story ORDER BY `index` DESC LIMIT 1")
     suspend fun lastItemOrNull(): Story?
+
+    @Transaction
+    @Query("SELECT * FROM story WHERE id = :id")
+    suspend fun getStoryWithCommentsById(id: Long): StoryWithComments?
 }
