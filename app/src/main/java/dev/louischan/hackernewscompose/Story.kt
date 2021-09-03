@@ -2,7 +2,6 @@ package dev.louischan.hackernewscompose
 
 import androidx.paging.PagingSource
 import androidx.room.*
-import java.sql.Timestamp
 
 @Entity
 data class Story (

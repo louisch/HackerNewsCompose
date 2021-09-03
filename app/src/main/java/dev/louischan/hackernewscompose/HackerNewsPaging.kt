@@ -1,8 +1,14 @@
 package dev.louischan.hackernewscompose
 
 import android.util.Log
-import androidx.paging.*
-import kotlinx.coroutines.flow.*
+import androidx.paging.ExperimentalPagingApi
+import androidx.paging.LoadType
+import androidx.paging.PagingState
+import androidx.paging.RemoteMediator
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import retrofit2.HttpException
 import java.io.IOException
 
@@ -27,6 +33,7 @@ class HNStoryRemoteMediator(appDatabase: AppDatabase, private val apiService: HN
             val nextTopStoryIds = when (loadType) {
                 LoadType.REFRESH -> {
                     Log.d(javaClass.name, "refreshing")
+                    commentIdDao.deleteAll()
                     topStoryIdDao.insertNew(apiService.topStoryIds())
                     topStoryIdDao.getFirstPage(state.config.pageSize)
                 }

@@ -1,7 +1,17 @@
 package dev.louischan.hackernewscompose
 
+import android.util.Log
+import androidx.compose.ui.Modifier
 import com.google.gson.*
 import com.google.gson.annotations.SerializedName
+import okhttp3.RequestBody
+import okhttp3.ResponseBody
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.Node
+import org.jsoup.nodes.TextNode
+import org.jsoup.select.NodeVisitor
+import retrofit2.Converter
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.converter.scalars.ScalarsConverterFactory
@@ -82,5 +92,74 @@ class TimestampDeserializer : JsonDeserializer<Timestamp> {
         }
         val seconds = json.asLong
         return Timestamp(seconds * 1000)
+    }
+}
+
+open class ComposeHTMLNode
+
+data class ComposeHTMLElement(
+    val modifier: Modifier,
+    val children: List<ComposeHTMLNode>,
+) : ComposeHTMLNode()
+
+data class ComposeHTMLTextNode(
+    val text: String,
+) : ComposeHTMLNode()
+
+class ComposeHTMLNothing : ComposeHTMLNode()
+
+class JsoupNodeConverter : Converter.Factory() {
+    override fun requestBodyConverter(
+        type: Type,
+        parameterAnnotations: Array<out Annotation>,
+        methodAnnotations: Array<out Annotation>,
+        retrofit: Retrofit
+    ): Converter<*, RequestBody>? {
+        return super.requestBodyConverter(type, parameterAnnotations, methodAnnotations, retrofit)
+    }
+
+    override fun responseBodyConverter(
+        type: Type,
+        annotations: Array<out Annotation>,
+        retrofit: Retrofit
+    ): Converter<ResponseBody, ComposeHTMLNode> {
+        return Converter<ResponseBody, ComposeHTMLNode> { body ->
+            val jsoup = Jsoup.parse(body.string())
+            var rootNode: ComposeHTMLNode? = null
+
+            jsoup.traverse(object : NodeVisitor {
+                override fun head(node: Node, depth: Int) {
+                    val asComposeNode = when (node) {
+                        is TextNode -> {
+                            ComposeHTMLTextNode(node.text())
+                        }
+                        is Element -> {
+                            ComposeHTMLElement(modifier = Modifier, children = listOf())
+                        }
+                        else -> {
+                            ComposeHTMLNothing()
+                        }
+                    }
+                    if (rootNode == null) {
+                        rootNode = asComposeNode
+                    }
+
+                    Log.d(javaClass.name, "head: $node   depth: $depth")
+                }
+
+                override fun tail(node: Node, depth: Int) {
+                    Log.d(javaClass.name, "tail: $node   depth: $depth")
+                }
+            })
+            rootNode
+        }
+    }
+
+    override fun stringConverter(
+        type: Type,
+        annotations: Array<out Annotation>,
+        retrofit: Retrofit
+    ): Converter<*, String>? {
+        return super.stringConverter(type, annotations, retrofit)
     }
 }

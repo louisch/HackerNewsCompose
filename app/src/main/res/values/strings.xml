@@ -2,4 +2,5 @@
     <string name="app_name">HackerNewsCompose</string>
     <string name="topAppBarOpenMenuContentDescription">Open Menu</string>
     <string name="topAppBarAccountContentDescription">Account</string>
+    <string name="prevMenuContentDescription">Go Back to Previous</string>
 </resources>

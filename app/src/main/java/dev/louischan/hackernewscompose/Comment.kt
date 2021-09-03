@@ -59,13 +59,16 @@ data class CommentId(
 
 @Dao
 interface CommentIdDao {
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(ids: List<CommentId>)
 
     suspend fun insertAllLongs(parentId: Long, ids: List<Long>) {
         insertAll(ids.map { id -> CommentId(id, parentId) })
     }
 
-    @Query("SELECT count(id) FROM comment")
+    @Query("SELECT count(id) FROM commentid")
     suspend fun count(): Long
+
+    @Query("DELETE FROM commentid")
+    suspend fun deleteAll()
 }
