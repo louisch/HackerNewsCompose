@@ -2,7 +2,7 @@
 
 This is an in-progress Hacker News client for Android. It is built using various Modern Android Development techniques including most prominently Jetpack Compose.
 
-This is in not meant for general use. I'm mostly using this app to practice and learn Android development.
+This is currently not meant for general use. I created this app to practice and learn Android development first and foremost, so it is quite rough around the edges and is missing many basic features one would expect from a Hacker News client found on Google Play, for instance.
 
 ## Screenshots
 
